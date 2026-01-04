@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>랜딩페이지 법률검수 도구 (단일페이지 + Worker 프록시)</title>
+  <style>
+    body {font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",Arial;background:#f6f7fb;margin:0;padding:0;color:#222;}
+    .container {max-width:980px;margin:40px auto;padding:0 18px;}
+    .card {background:#fff;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,0.06);padding:22px 24px;margin-bottom:16px;}
+    h1 {margin:0;font-size:20px;}
+    .sub {color:#666;font-size:13px;margin-top:6px;line-height:1.6;}
+    .row {display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;}
+    label.small {font-size:12px;color:#777;display:block;margin-bottom:6px;}
+    input[type=text], textarea, select {width:100%;padding:14px 14px;font-size:14px;border:1px solid #ddd;border-radius:12px;box-sizing:border-box;}
+    textarea {min-height:140px;resize:vertical;line-height:1.55;}
+    .btn {display:inline-block;padding:12px 18px;border:none;border-radius:12px;background:#111;color:#fff;font-weight:900;cursor:pointer;font-size:14px;}
+    .btn:disabled {background:#777;cursor:not-allowed;}
+    .btn-ghost {background:#fff;color:#111;border:1px solid #ddd;}
+    .small {font-size:12px;color:#777;}
+    .pill {font-size:12px;background:#111;color:#fff;padding:6px 10px;border-radius:999px;display:inline-block;margin-right:6px;}
+    .resultbox {background:#0b1020;color:#e8e8e8;border-radius:16px;padding:16px;font-size:12px;line-height:1.55;white-space:pre-wrap;max-height:180px;overflow:auto;}
+    .grid {display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    @media (max-width: 900px){ .grid {grid-template-columns:1fr;} }
+
+    .report-wrap {background:#fff;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,0.06);padding:0;margin-bottom:16px;overflow:hidden;}
+    .report-head {padding:20px 22px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:12px;}
+    .score {font-size:34px;font-weight:900;}
+    .report-body {padding:20px 22px;}
+    .badge {display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:900;color:#fff;margin-right:10px;}
+    .badge-critical {background:#d11a2a;}
+    .badge-high {background:#ff5a00;}
+    .badge-medium {background:#f0ad00;}
+    .badge-low {background:#1a73e8;}
+    .finding {display:flex;gap:12px;padding:12px;border-radius:12px;background:#fafafa;border:1px solid #eee;margin-bottom:10px;}
+    .finding-title {font-weight:900;margin-bottom:6px;}
+    .finding-desc {font-size:13px;color:#444;line-height:1.55;}
+    .finding-meta {font-size:12px;color:#777;margin-top:6px;}
+    .ok-box {padding:12px;border-radius:12px;background:#f0fff4;border:1px solid #b7ebc6;}
+    .muted {color:#777;font-size:13px;}
+    details {border:1px solid #eee;border-radius:14px;overflow:hidden;background:#fff;margin-top:10px;}
+    summary {padding:14px 16px;cursor:pointer;font-weight:900;list-style:none;display:flex;justify-content:space-between;align-items:center;}
+    summary::-webkit-details-marker {display:none;}
+    pre {margin:0;padding:14px 16px;background:#0b1020;color:#e6e6e6;font-size:12px;line-height:1.55;overflow:auto;white-space:pre-wrap;}
+    .audit-row {border:1px solid #eee;background:#fafafa;border-radius:14px;padding:12px;margin-bottom:10px;}
+    .audit-head {display:flex;align-items:center;gap:10px;}
+    .audit-body {margin-top:10px;font-size:13px;line-height:1.6;color:#333;}
+    .status-pill {display:inline-block;color:#fff;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:900;}
+    .footer {font-size:12px;color:#888;padding:16px 2px;line-height:1.55;}
+    .warn {padding:12px;border-radius:12px;background:#fff7e6;border:1px solid #ffe1a3;color:#7a4b00;font-size:13px;line-height:1.55;}
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <div class="card">
+    <h1>⚖️ 랜딩페이지 법률검수 도구 (1안: 단일페이지 + Worker 프록시)</h1>
+    <div class="sub">
+      ✅ URL 입력 → Worker가 HTML 소스를 긁어옴(CORS 우회) → 텍스트 추출/룰 검수 → 같은 페이지에서 리포트 출력<br>
+      ✅ OCR은 기본 제외(포기 가능). 필요 시 Gemini API(선택)로 판단 보강 가능<br>
+      ✅ *일부 사이트는 Cloudflare/봇차단/로그인 필요 등에 의해 소스 수집이 실패할 수 있습니다.*
+    </div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div>
+        <label class="small">검수 URL</label>
+        <input id="url" type="text" placeholder="https://...">
+      </div>
+      <div>
+        <label class="small">프록시(Worker) URL</label>
+        <input id="proxyBase" type="text" placeholder="https://xxxx.workers.dev" />
+        <div class="small" style="margin-top:6px;color:#999;">
+          기본값이 이미 설정되어 있습니다. 필요시 변경 가능합니다.
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="runBtn" onclick="runCheck()">검수 실행</button>
+      <button class="btn btn-ghost" onclick="toggleAdvanced()">고급(추출/AI 옵션)</button>
+      <span class="small" id="status"></span>
+    </div>
+
+    <div id="advanced" style="display:none; margin-top:14px;">
+      <div class="card" style="box-shadow:none; border:1px solid #eee; background:#fafafa;">
+        <div class="grid">
+          <div>
+            <label class="small">iframe src까지 수집 시도</label>
+            <select id="fetchIframes">
+              <option value="true" selected>ON (가능한 범위)</option>
+              <option value="false">OFF</option>
+            </select>
+          </div>
+          <div>
+            <label class="small">숨김 텍스트 추출(스타일 기반)</label>
+            <select id="extractHidden">
+              <option value="true" selected>ON</option>
+              <option value="false">OFF</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;" class="warn">
+          <b>Gemini 판단(선택)</b><br>
+          - 체크하면 룰 기반 결과와 별도로, Gemini에게 “추가 리스크 문구/누락 항목”을 판별하도록 요청합니다.<br>
+          - API Key는 브라우저에 저장되지 않으며, 호출은 클라이언트에서 직접 수행됩니다(키 유출 주의).<br>
+        </div>
+
+        <div class="grid" style="margin-top:12px;">
+          <div>
+            <label class="small">Gemini 사용</label>
+            <select id="useGemini" onchange="onGeminiToggle()">
+              <option value="false" selected>OFF</option>
+              <option value="true">ON</option>
+            </select>
+          </div>
+          <div>
+            <label class="small">Gemini API Key</label>
+            <input id="geminiKey" type="text" placeholder="AIza... (필요 시 입력)" disabled/>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label class="small">Gemini 모델</label>
+          <select id="geminiModel" disabled>
+            <option value="gemini-1.5-flash" selected>gemini-1.5-flash (추천)</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <h1 style="font-size:16px;">결과(요약 로그)</h1>
+    <div class="sub">아래는 요약 로그이며, 상세 리포트는 바로 아래에서 확인 가능합니다.</div>
+    <div class="resultbox" id="resultBox"></div>
+  </div>
+
+  <div class="report-wrap" id="reportCard" style="display:none;">
+    <div class="report-head">
+      <div>
+        <div style="font-size:18px;font-weight:900;">📄 상세 리포트</div>
+        <div class="sub" id="reportMeta"></div>
+      </div>
+      <div style="text-align:right;">
+        <div class="score" id="reportScore"></div>
+        <div class="sub">(기본점수 100점)</div>
+      </div>
+    </div>
+    <div class="report-body">
+      <div class="sub" id="reportOptions"></div>
+
+      <div style="margin-top:14px;font-size:16px;font-weight:900;">🚨 위반/주의 사항 (룰 기반)</div>
+      <div id="findingsBox" style="margin-top:10px;"></div>
+
+      <div id="geminiBoxWrap" style="display:none;">
+        <div style="margin-top:18px;font-size:16px;font-weight:900;">🤖 Gemini 판단(보강)</div>
+        <div class="muted" style="margin:8px 0;">* 룰 기반 결과를 대체하지 않으며, 추가 리스크 탐지/누락 보강용입니다.</div>
+        <div id="geminiBox" class="audit-row" style="background:#f0f7ff;"></div>
+      </div>
+
+      <div style="margin-top:18px;font-size:16px;font-weight:900;">➖ 해당사항 없음(N/A) 항목</div>
+      <div class="muted" style="margin:8px 0;">
+        * “N/A”는 (i) 해당 페이지에 전제가 없거나, (ii) 페이지 유형상 적용되지 않는 항목입니다. 각 항목별로 근거를 함께 표시합니다.
+      </div>
+      <div id="naBox"></div>
+
+      <div style="margin-top:18px;font-size:16px;font-weight:900;">✅ 룰별 판단 근거(감사 로그)</div>
+      <details>
+        <summary>룰별 PASS/FAIL/N/A 근거 보기 <span class="muted">펼치기</span></summary>
+        <div style="padding:14px 16px;" id="auditBox"></div>
+      </details>
+
+      <div style="margin-top:18px;font-size:16px;font-weight:900;">🧾 추출 텍스트(디버그)</div>
+      <details>
+        <summary>visible 텍스트 <span class="muted">펼치기</span></summary>
+        <pre id="debugVisible"></pre>
+      </details>
+      <details>
+        <summary>숨김 텍스트 <span class="muted">펼치기</span></summary>
+        <pre id="debugHidden"></pre>
+      </details>
+      <details>
+        <summary>iframe 텍스트 <span class="muted">펼치기</span></summary>
+        <pre id="debugIframe"></pre>
+      </details>
+
+      <div class="footer">
+        본 검수 결과는 내부 참고용이며, 법적 적합성에 대한 최종 판단을 확정하거나 이를 보증하지 않습니다. 사실관계 및 적용 법령에 따라 결론이 달라질 수 있습니다.<br>
+        본 결과에 기초한 조치·의사결정에 관한 책임은 사용자에게 있으며, 필요한 경우 바른사업기획팀에 별도 문의하시기 바랍니다.
+      </div>
+    </div>
+  </div>
+
+  <div class="small" style="padding:10px 4px;color:#999;line-height:1.6;">
+    본 검수 시스템은 이벤트 페이지의 법적 리스크 식별을 위한 <b>내부 참고용 보조 도구</b>입니다.
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   0) 기본 설정: 프로님 worker URL 기본값 박기
+========================================================= */
+const PROXY_BASE_DEFAULT = "https://landing-proxy.10compliance.workers.dev";
+
+/* =========================================================
+   1) UI
+========================================================= */
+function toggleAdvanced(){
+  const el = document.getElementById("advanced");
+  el.style.display = (el.style.display === "none" ? "block" : "none");
+}
+
+function onGeminiToggle(){
+  const on = document.getElementById("useGemini").value === "true";
+  document.getElementById("geminiKey").disabled = !on;
+  document.getElementById("geminiModel").disabled = !on;
+}
+
+(function init(){
+  document.getElementById("proxyBase").value = PROXY_BASE_DEFAULT;
+})();
+
+/* =========================================================
+   2) Worker로 HTML 가져오기
+========================================================= */
+async function fetchHtmlViaProxy(proxyBase, url){
+  const endpoint = proxyBase.replace(/\/$/, "") + "/fetch?url=" + encodeURIComponent(url);
+  const resp = await fetch(endpoint, { method:"GET" });
+  const text = await resp.text();
+  const finalUrl = resp.headers.get("X-Proxy-Final-URL") || url;
+  const proxyStatus = resp.headers.get("X-Proxy-Status") || String(resp.status);
+  return { html: text, finalUrl, proxyStatus };
+}
+
+/* =========================================================
+   3) HTML 파싱 + 텍스트 추출 (visible/hidden)
+========================================================= */
+function parseHtmlToDoc(html, baseUrl){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  let baseEl = doc.querySelector("base");
+  if(!baseEl){
+    baseEl = doc.createElement("base");
+    baseEl.href = baseUrl;
+    doc.head.appendChild(baseEl);
+  } else {
+    baseEl.href = baseUrl;
+  }
+  return doc;
+}
+
+function collectTextFromDoc(doc, {extractHidden=true}){
+  doc.querySelectorAll("script, style, noscript").forEach(n => n.remove());
+
+  const visibleParts = [];
+  const hiddenParts = [];
+
+  const isHiddenByAttr = (el) => {
+    if(!el) return false;
+    if(el.hidden) return true;
+    const aria = el.getAttribute && el.getAttribute("aria-hidden");
+    if(aria === "true") return true;
+    return false;
+  };
+
+  const isHiddenByStyle = (el) => {
+    if(!el || !el.getAttribute) return false;
+    const style = (el.getAttribute("style") || "").toLowerCase();
+    if(!style) return false;
+    if(style.includes("display:none")) return true;
+    if(style.includes("visibility:hidden")) return true;
+    if(style.includes("opacity:0")) return true;
+    return false;
+  };
+
+  const walker = doc.createTreeWalker(doc.body || doc, NodeFilter.SHOW_ELEMENT, null);
+  let node = walker.currentNode;
+
+  while(node){
+    const tag = (node.tagName || "").toLowerCase();
+    if(tag === "input"){
+      const v = node.getAttribute("value") || "";
+      if(v.trim()) visibleParts.push(v.trim());
+    }
+    if(tag === "textarea"){
+      const v = node.textContent || "";
+      if(v.trim()) visibleParts.push(v.trim());
+    }
+
+    const text = (node.innerText || node.textContent || "").trim();
+    if(text && text.length >= 2){
+      const hidden = isHiddenByAttr(node) || (extractHidden && isHiddenByStyle(node));
+      if(hidden) hiddenParts.push(text);
+      else visibleParts.push(text);
+    }
+    node = walker.nextNode();
+  }
+
+  const uniq = (arr) => Array.from(new Set(arr.map(x => x.replace(/\s+/g," ").trim()).filter(Boolean)));
+  return {
+    visibleText: uniq(visibleParts).join("\n"),
+    hiddenText: uniq(hiddenParts).join("\n")
+  };
+}
+
+function extractIframeSrcs(doc, baseUrl){
+  const srcs = [];
+  doc.querySelectorAll("iframe").forEach(f => {
+    const src = f.getAttribute("src");
+    if(src){
+      try {
+        const u = new URL(src, baseUrl).toString();
+        srcs.push(u);
+      } catch(e){}
+    }
+  });
+  return Array.from(new Set(srcs));
+}
+
+/* =========================================================
+   4) 페이지 유형 분류(휴리스틱)
+========================================================= */
+const PAGE_TYPES = {
+  OUTBOUND_EVENT: [/아웃바운드/i,/전화\s*상담/i,/상담\s*전화/i,/TM/i,/콜/i,/콜백/i,/연락\s*드리/i,/무료\s*상담/i,/보험\s*상담/i,/상담\s*신청/i,/DB/i,/리드/i],
+  EVENT: [/이벤트/i,/경품/i,/추첨/i,/당첨/i,/쿠폰/i,/참여/i,/혜택/i],
+  INSURANCE: [/보험/i,/설계사/i,/보장/i,/가입/i,/보험료/i,/손해보험/i,/생명보험/i],
+  ECOMMERCE: [/결제/i,/주문/i,/배송/i,/장바구니/i,/환불/i,/교환/i,/상품/i],
+  FORM_ONLY: [/이름/i,/연락처/i,/휴대폰/i,/문자/i,/상담/i,/신청/i,/제출/i,/문의/i],
+};
+
+function classifyPageType(text) {
+  const hits = [];
+  for (const [t, pats] of Object.entries(PAGE_TYPES)) {
+    for (const p of pats) {
+      if (p.test(text)) { hits.push(t); break; }
+    }
+  }
+  if (!hits.length) return {type:"GENERIC", reason:["유형 키워드 미검출 → GENERIC로 분류"]};
+  const priority = ["OUTBOUND_EVENT","EVENT","INSURANCE","ECOMMERCE","FORM_ONLY"];
+  const picked = priority.find(x => hits.includes(x)) || hits[0];
+  return {type:picked, reason:[`${picked} 관련 키워드 검출 → ${picked}로 분류`]};
+}
+
+function detectDraw(text){ return /추첨|당첨/i.test(text); }
+function detectReward(text){ return /쿠폰|할인쿠폰|경품|상품권|증정|사은품/i.test(text); }
+
+/* =========================================================
+   5) 룰 엔진(샘플: 핵심 룰)
+========================================================= */
+const RULES = [
+  {
+    id:"PIPA_MARKETING_REQUIRED",
+    severity:"CRITICAL",
+    title:"개인정보보호법 - 마케팅 수신 동의는 선택 동의 원칙(필수 표시 금지)",
+    desc:"마케팅 정보 수신 동의가 '필수'로 설계될 경우, 서비스 제공과 무관한 개인정보 처리로 평가될 수 있어 리스크가 큽니다.",
+    patterns:[
+      /마케팅\s*정보\s*수신.*필수/i,
+      /마케팅.*수신.*동의.*필수/i,
+      /마케팅\s*정보.*동의.*필수/i,
+      /광고\s*성\s*정보.*필수/i,
+      /수신\s*동의.*필수/i,
+    ],
+    penalty:20,
+    meta:{ applicability:"ALWAYS", na_reason:null }
+  },
+  {
+    id:"CONSENT_FREE_WILL",
+    severity:"NOTICE",
+    title:"동의 자유 원칙(점검) - 불이익 고지 범위 오인 가능성",
+    desc:"‘동의하지 않으면 이용/참여 불가’ 문구가 선택동의(마케팅/제3자 제공 등)까지 포함하는 것으로 읽히지 않는지 점검 필요.",
+    patterns:[
+      /동의하지\s*않을\s*경우.*(불가능|제한|참여\s*불가)/i,
+      /동의\s*거부.*(불가능|제한|참여\s*불가)/i,
+      /미동의\s*시.*(불가능|제한|참여\s*불가)/i
+    ],
+    penalty:0,
+    meta:{ applicability:"ALWAYS", na_reason:null }
+  },
+  {
+    id:"PRIZE_DRAW_INFO",
+    severity:"MEDIUM",
+    title:"경품/추첨 고지 - 추첨일/발표 방식 안내 부족",
+    desc:"추첨형 경품이 언급되나 추첨일/발표 방식(당첨자 공지 등) 안내가 부족하면 분쟁·민원 리스크가 있습니다.",
+    patterns:[/당첨자\s*발표일/i, /발표일/i, /당첨자\s*발표/i, /공지/i, /추첨일/i],
+    penalty:10,
+    meta:{ applicability:"REQUIRES_PRIZE_DRAW", na_reason:"추첨(경품) 요소가 없는 페이지에서는 비적용" }
+  },
+  {
+    id:"REWARD_CONDITION_DISCLOSURE",
+    severity:"MEDIUM",
+    title:"경품/쿠폰 - 지급조건·제한조건 고지 필요",
+    desc:"경품/쿠폰 제공이 있는 경우, 지급 조건/1인 1회 제한/발송 시점/사용기한 등 제한조건이 확인되어야 합니다.",
+    patterns:[/유의사항/i, /주의사항/i, /지급\s*조건/i, /사용기간/i, /발송/i, /제한/i, /1인\s*1회/i],
+    penalty:10,
+    meta:{ applicability:"REQUIRES_REWARD", na_reason:"쿠폰/경품/증정 요소가 없는 페이지에서는 비적용" }
+  }
+];
+
+function applicability(rule, allText, pageType){
+  const app = rule.meta?.applicability || "ALWAYS";
+  const naReason = rule.meta?.na_reason || "";
+  if (app === "ALWAYS") return {ok:true, reason:"", evidence:""};
+
+  if (app === "REQUIRES_PRIZE_DRAW") {
+    if (detectDraw(allText)) return {ok:true, reason:"", evidence:""};
+    return {ok:false, reason:naReason || "추첨 요소 미검출", evidence:"근거: '추첨/당첨' 키워드 미검출"};
+  }
+
+  if (app === "REQUIRES_REWARD") {
+    if (detectReward(allText)) return {ok:true, reason:"", evidence:""};
+    return {ok:false, reason:naReason || "쿠폰/경품 요소 미검출", evidence:"근거: '쿠폰/경품/상품권/증정/사은품' 키워드 미검출"};
+  }
+
+  return {ok:true, reason:"", evidence:""};
+}
+
+function findSnippet(text, regexArr, maxLen=180){
+  if(!text) return "";
+  for(const r of regexArr){
+    const idx = text.search(r);
+    if(idx >= 0){
+      const start = Math.max(idx - 70, 0);
+      const end = Math.min(idx + 140, text.length);
+      let snip = text.substring(start, end).replace(/\n/g," ").replace(/\s{2,}/g," ").trim();
+      if(snip.length > maxLen) snip = snip.slice(0, maxLen) + "...";
+      return snip;
+    }
+  }
+  return "";
+}
+
+function runRules(allText, pageType){
+  let score = 100;
+  const findings = [];
+  const ruleAudit = [];
+  const naItems = [];
+
+  for(const rule of RULES){
+    const app = applicability(rule, allText, pageType);
+    if(!app.ok){
+      naItems.push({ title: rule.title, reason: `${app.reason} (페이지유형=${pageType})`, evidence: app.evidence });
+      ruleAudit.push({ severity: rule.severity, title: rule.title, status: "N/A",
+        reason: `${app.reason} (페이지유형=${pageType})`, snippet: app.evidence });
+      continue;
+    }
+
+    const matched = rule.patterns.some(r => r.test(allText));
+    let status = "PASS";
+    let reason = "";
+    let snippet = findSnippet(allText, rule.patterns);
+
+    if(rule.id === "PIPA_MARKETING_REQUIRED"){
+      if(matched){
+        score -= rule.penalty;
+        status = "FAIL";
+        reason = "마케팅 수신 동의가 ‘필수’로 표시됨 → CRITICAL 위반";
+        findings.push({ severity: rule.severity, title: rule.title, desc: rule.desc, keyword: "마케팅 수신 동의(필수)", source: "페이지 소스" });
+      } else {
+        reason = "마케팅 수신 동의 ‘필수’ 표시 미검출";
+      }
+    } else if(rule.id === "CONSENT_FREE_WILL"){
+      if(matched){
+        status = "NOTICE";
+        reason = "불이익 안내 문구 확인됨. 선택동의까지 포함되는 것으로 오인되지 않는지 점검 필요(감점 없음).";
+      } else {
+        reason = "불이익 안내 문구 미검출";
+      }
+    } else {
+      if(matched){
+        status = "PASS";
+        reason = "관련 고지/요건 문구가 확인됨";
+      } else {
+        status = "FAIL";
+        reason = "적용 전제가 있는 항목이나 관련 고지/요건 문구가 확인되지 않음 → 감점";
+        score -= rule.penalty;
+        findings.push({ severity: rule.severity, title: rule.title, desc: rule.desc, keyword: "고지/요건 누락", source: "페이지 소스" });
+      }
+    }
+
+    ruleAudit.push({ severity: rule.severity, title: rule.title, status, reason, snippet: snippet || (matched ? "(스니펫 생성 실패)" : "관련 키워드 미검출") });
+  }
+
+  return { score: Math.max(0, score), findings, ruleAudit, naItems };
+}
+
+/* =========================================================
+   6) Gemini 판단(선택)
+========================================================= */
+async function callGemini({apiKey, model, text, pageType}){
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const prompt = `
+너는 한국 법률(개인정보보호법, 정보통신망법 광고성 정보, 표시광고법/경품고시) 관점에서 랜딩페이지 문구를 점검하는 법무 검토 도우미다.
+아래는 랜딩페이지에서 추출한 텍스트다. 페이지 유형은 ${pageType}이다.
+
+[요청]
+1) 법률/규제 리스크가 있는 문구(오인 가능 포함)를 최대 8개까지 찾아서, 각 항목별로:
+   - 리스크 유형
+   - 문제 문구(원문 그대로)
+   - 왜 문제인지
+   - 개선 권고 문구(실무형)
+2) 누락 가능성이 큰 필수 고지 항목을 최대 6개까지 제시
+3) 마지막에 "종합 리스크 등급(LOW/MEDIUM/HIGH/CRITICAL)"을 한 줄로 제시
+
+[텍스트]
+${text}
+  `.trim();
+
+  const body = {
+    contents: [{ role:"user", parts:[{ text: prompt }]}],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+  };
+
+  const resp = await fetch(endpoint, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  });
+  if(!resp.ok){
+    const err = await resp.text();
+    throw new Error("Gemini 호출 실패: " + err.slice(0,400));
+  }
+  const data = await resp.json();
+  const out = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
+  return out.trim();
+}
+
+/* =========================================================
+   7) 리포트 렌더
+========================================================= */
+function sevClass(sev){
+  if(sev==="CRITICAL") return "badge-critical";
+  if(sev==="HIGH") return "badge-high";
+  if(sev==="MEDIUM") return "badge-medium";
+  return "badge-low";
+}
+function statusPill(status){
+  const m = {
+    "PASS": ["PASS","#1e8e3e"],
+    "FAIL": ["FAIL","#d11a2a"],
+    "N/A": ["N/A","#777"],
+    "NOTICE": ["NOTICE","#1a73e8"]
+  };
+  const [label, color] = m[status] || ["N/A","#777"];
+  return `<span class="status-pill" style="background:${color}">${label}</span>`;
+}
+function escapeHtml(s){
+  if(s==null) return "";
+  return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+}
+
+function renderReport({url, finalUrl, proxyStatus, pageType, typeReason, score, findings, ruleAudit, naItems, visibleText, hiddenText, iframeText, options}) {
+  document.getElementById("reportScore").innerText = `${score}점`;
+  document.getElementById("reportMeta").innerHTML = `
+    검수 대상: <a href="${escapeHtml(finalUrl)}" target="_blank"><b>${escapeHtml(finalUrl)}</b></a><br/>
+    프록시 상태: <b>${escapeHtml(proxyStatus)}</b><br/>
+    생성: <b>${new Date().toLocaleString()}</b><br/>
+    페이지 유형: <b>${pageType}</b> <span class="muted">(${escapeHtml(typeReason.join(" / "))})</span>
+  `;
+  document.getElementById("reportOptions").innerHTML = `
+    옵션:
+    <span class="pill">iframe=${String(options.fetchIframes)}</span>
+    <span class="pill">숨김추출=${String(options.extractHidden)}</span>
+    <span class="pill">Gemini=${String(options.useGemini)}</span>
+  `;
+
+  const fBox = document.getElementById("findingsBox");
+  if(!findings.length){
+    fBox.innerHTML = `<div class="ok-box">✅ 주요 위반/주의 사항이 발견되지 않았습니다.</div>`;
+  } else {
+    fBox.innerHTML = findings.map(f => `
+      <div class="finding">
+        <span class="badge ${sevClass(f.severity)}">${escapeHtml(f.severity)}</span>
+        <div>
+          <div class="finding-title">${escapeHtml(f.title)}</div>
+          <div class="finding-desc">${escapeHtml(f.desc)}</div>
+          <div class="finding-meta">키워드: <b>${escapeHtml(f.keyword)}</b> / 기준: ${escapeHtml(f.source)}</div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  const naBox = document.getElementById("naBox");
+  if(!naItems.length){
+    naBox.innerHTML = `<div class="muted">없음</div>`;
+  } else {
+    naBox.innerHTML = naItems.map(n => `
+      <div class="audit-row" style="background:#f7f7f7;">
+        <div style="font-weight:900;">➖ ${escapeHtml(n.title)}</div>
+        <div class="muted" style="margin-top:6px;">${escapeHtml(n.reason)}</div>
+        <div class="muted" style="margin-top:6px;"><b>근거:</b> ${escapeHtml(n.evidence || "해당 없음")}</div>
+      </div>
+    `).join("");
+  }
+
+  const aBox = document.getElementById("auditBox");
+  aBox.innerHTML = ruleAudit.map(a => `
+    <div class="audit-row">
+      <div class="audit-head">
+        ${statusPill(a.status)}
+        <span style="font-weight:900;">${escapeHtml(a.title)}</span>
+        <span class="badge ${sevClass(a.severity)}" style="margin-left:auto;">${escapeHtml(a.severity)}</span>
+      </div>
+      <div class="audit-body">
+        <div><b>판단 사유:</b> ${escapeHtml(a.reason)}</div>
+        <div style="margin-top:8px;"><b>근거 문구/사유:</b> <span class="muted">${escapeHtml(a.snippet)}</span></div>
+      </div>
+    </div>
+  `).join("");
+
+  document.getElementById("debugVisible").innerText = visibleText || "";
+  document.getElementById("debugHidden").innerText = hiddenText || "";
+  document.getElementById("debugIframe").innerText = iframeText || "";
+}
+
+/* =========================================================
+   8) 실행
+========================================================= */
+async function runCheck(){
+  const url = document.getElementById("url").value.trim();
+  const proxyBase = document.getElementById("proxyBase").value.trim();
+  const fetchIframes = document.getElementById("fetchIframes").value === "true";
+  const extractHidden = document.getElementById("extractHidden").value === "true";
+  const useGemini = document.getElementById("useGemini").value === "true";
+  const geminiKey = document.getElementById("geminiKey").value.trim();
+  const geminiModel = document.getElementById("geminiModel").value;
+
+  if(!url){ alert("URL을 입력하세요."); return; }
+  if(!proxyBase){ alert("프록시(Worker) URL을 입력하세요."); return; }
+  if(useGemini && !geminiKey){ alert("Gemini ON이면 API Key가 필요합니다."); return; }
+
+  document.getElementById("runBtn").disabled = true;
+  document.getElementById("status").innerText = "검수 중... (HTML 수집/분석)";
+  document.getElementById("geminiBoxWrap").style.display = "none";
+  document.getElementById("geminiBox").innerHTML = "";
+
+  try {
+    const main = await fetchHtmlViaProxy(proxyBase, url);
+    const doc = parseHtmlToDoc(main.html, main.finalUrl);
+    const texts = collectTextFromDoc(doc, { extractHidden });
+
+    let iframeText = "";
+    let iframeCount = 0;
+
+    if(fetchIframes){
+      const iframeSrcs = extractIframeSrcs(doc, main.finalUrl);
+      iframeCount = iframeSrcs.length;
+      if(iframeSrcs.length){
+        document.getElementById("status").innerText = `검수 중... (iframe ${iframeSrcs.length}개 수집 시도)`;
+      }
+      for(const src of iframeSrcs){
+        try{
+          const f = await fetchHtmlViaProxy(proxyBase, src);
+          const fdoc = parseHtmlToDoc(f.html, f.finalUrl);
+          const ftexts = collectTextFromDoc(fdoc, { extractHidden:false });
+          iframeText += "\n\n[IFRAME] " + f.finalUrl + "\n" + (ftexts.visibleText || "");
+        }catch(e){
+          iframeText += "\n\n[IFRAME-FAIL] " + src + "\n" + String(e.message || e);
+        }
+      }
+    }
+
+    const allText = [texts.visibleText, texts.hiddenText, iframeText].filter(Boolean).join("\n\n");
+    const typeInfo = classifyPageType(allText);
+    const pageType = typeInfo.type;
+    const typeReason = typeInfo.reason;
+
+    const result = runRules(allText, pageType);
+
+    const logLines = [];
+    logLines.push(`검수 대상: ${url}`);
+    logLines.push(`최종 URL: ${main.finalUrl}`);
+    logLines.push(`프록시 상태: ${main.proxyStatus}`);
+    logLines.push(`옵션: iframe=${fetchIframes}, 숨김추출=${extractHidden}, Gemini=${useGemini}`);
+    logLines.push(`iframe 수: ${iframeCount}`);
+    logLines.push(`페이지 유형: ${pageType} / 근거=${typeReason.join(" / ")}`);
+    logLines.push("--------------------------------------------------");
+    logLines.push(`최종 점수: ${result.score}점`);
+    if(result.findings.length){
+      logLines.push("위반/주의 사항:");
+      for(const f of result.findings){
+        logLines.push(` - [${f.severity}] ${f.title} (키워드: ${f.keyword})`);
+      }
+    } else {
+      logLines.push("위반/주의 사항: 없음");
+    }
+    if(result.naItems.length){
+      logLines.push("");
+      logLines.push("N/A 항목(근거 포함):");
+      for(const n of result.naItems){
+        logLines.push(` - ➖ ${n.title} / ${n.reason}`);
+      }
+    }
+
+    document.getElementById("resultCard").style.display = "block";
+    document.getElementById("resultBox").innerText = logLines.join("\n");
+
+    document.getElementById("reportCard").style.display = "block";
+    renderReport({
+      url,
+      finalUrl: main.finalUrl,
+      proxyStatus: main.proxyStatus,
+      pageType,
+      typeReason,
+      score: result.score,
+      findings: result.findings,
+      ruleAudit: result.ruleAudit,
+      naItems: result.naItems,
+      visibleText: texts.visibleText,
+      hiddenText: texts.hiddenText,
+      iframeText,
+      options:{ fetchIframes, extractHidden, useGemini }
+    });
+
+    if(useGemini){
+      document.getElementById("status").innerText = "Gemini 판단 중...";
+      const geminiOut = await callGemini({
+        apiKey: geminiKey,
+        model: geminiModel,
+        text: allText.slice(0, 24000),
+        pageType
+      });
+      document.getElementById("geminiBoxWrap").style.display = "block";
+      document.getElementById("geminiBox").innerHTML = `<div style="white-space:pre-wrap;line-height:1.6;">${escapeHtml(geminiOut)}</div>`;
+    }
+
+  } catch(e) {
+    alert("오류: " + (e.message || e));
+  }
+
+  document.getElementById("runBtn").disabled = false;
+  document.getElementById("status").innerText = "";
+}
+</script>
+</body>
+</html>
