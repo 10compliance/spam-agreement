@@ -22,7 +22,7 @@
     *{box-sizing:border-box;}
 
     /* 한 페이지에 최대한 담기 위한 레이아웃/타이포 조정 */
-    body{margin:0; padding:18px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif; background:var(--bg); color:var(--text);}
+    body{margin:0; padding:18px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif; background:var(--bg); color:var(--text);} 
     .wrap{max-width:1220px; margin:0 auto;}
     h1{margin:0 0 6px 0; font-size:20px; letter-spacing:-.2px;}
     .sub{margin:0 0 12px 0; color:var(--muted); line-height:1.55; font-size:12px;}
@@ -53,14 +53,14 @@
 
     .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; position:sticky; bottom:10px; padding-top:8px; background:linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.9) 30%, rgba(255,255,255,1));}
     button{cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--text); padding:9px 12px; border-radius: 12px; font-weight:900; font-size:12px;}
-    button.primary{background: linear-gradient(180deg, rgba(37,99,235,.95), rgba(29,78,216,.95)); border-color: rgba(37,99,235,.20); color:#fff; box-shadow: 0 6px 16px rgba(37,99,235,.18);}
+    button.primary{background: linear-gradient(180deg, rgba(37,99,235,.95), rgba(29,78,216,.95)); border-color: rgba(37,99,235,.20); color:#fff; box-shadow: 0 6px 16px rgba(37,99,235,.18);}    
 
     .hr{height:1px; background:var(--line); margin:12px 0;}
 
     .badge{display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; font-weight:900; font-size:11px; border:1px solid var(--line); background:#f9fafb;}
-    .badge.ok{color:var(--ok); background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.25);}
-    .badge.warn{color:var(--warn); background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.25);}
-    .badge.bad{color:var(--bad); background: rgba(239,68,68,.08); border-color: rgba(239,68,68,.25);}
+    .badge.ok{color:var(--ok); background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.25);} 
+    .badge.warn{color:var(--warn); background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.25);} 
+    .badge.bad{color:var(--bad); background: rgba(239,68,68,.08); border-color: rgba(239,68,68,.25);} 
 
     .mini{font-size:11px; color:var(--muted); line-height:1.5;}
 
@@ -519,14 +519,9 @@ function runReview(){
     if(!r) issues.push("[제3자 제공] 제공받는 자가 비어있습니다.");
     if(!i) issues.push("[제3자 제공] 제공 항목이 비어있습니다.");
 
-// 기간 숫자 검증 (년 단위 입력, 1 미만은 개월로 자동 변환)
-if(!m) issues.push("[제3자 제공] 제공 기간(년)이 비어있습니다.");
-else if(!/^\d*(\.\d+)?$/.test(m)) issues.push("[제3자 제공] 제공 기간(년)은 숫자만 입력해야 합니다. (예: 1, 2.5, 0.1)");
-else {
-  const n = parseFloat(m);
-  if(isNaN(n) || n <= 0) issues.push("[제3자 제공] 제공 기간(년)은 0보다 큰 값이어야 합니다.");
-  if(n < 1) warns.push("[제3자 제공] 제공 기간이 1년 미만으로 입력되어, 월 단위로 자동 변환됩니다. 표시값을 확인하세요.");
-}
+    // 기간 숫자 검증
+    if(!m) issues.push("[제3자 제공] 제공 기간(개월)이 비어있습니다.");
+    else if(!/^[0-9]+$/.test(m)) issues.push("[제3자 제공] 제공 기간(개월)은 숫자만 입력해야 합니다.");
 
     // 거부권 공란
     if(!denyTp) issues.push("[거부권/불이익-제3자 제공] 문구가 비어있습니다.");
