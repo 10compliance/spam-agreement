@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>개인정보 동의문 생성기/검수기 v2.3</title>
+  <style>
+    :root{
+      --bg:#f6f7f9;
+      --card:#ffffff;
+      --text:#111827;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --accent:#2563eb;
+      --ok:#16a34a;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --radius:16px;
+      --shadow: 0 6px 24px rgba(17,24,39,.06);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    *{box-sizing:border-box;}
+
+    /* 한 페이지에 최대한 담기 위한 레이아웃/타이포 조정 */
+    body{margin:0; padding:18px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif; background:var(--bg); color:var(--text);}
+    .wrap{max-width:1220px; margin:0 auto;}
+    h1{margin:0 0 6px 0; font-size:20px; letter-spacing:-.2px;}
+    .sub{margin:0 0 12px 0; color:var(--muted); line-height:1.55; font-size:12px;}
+
+    .grid{display:grid; grid-template-columns: 1.1fr .9fr; gap:12px; align-items:start;}
+    @media(max-width:980px){ .grid{grid-template-columns:1fr;} }
+
+    .card{background:var(--card); border:1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding:14px;}
+    .card h2{margin:0 0 10px 0; font-size:14px;}
+
+    label{display:block; margin:0 0 6px 0; font-size:12px; font-weight:850;}
+    input[type="text"], textarea, select{
+      width:100%;
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 8px 10px;
+      outline:none;
+      font-size:13px;
+    }
+
+    textarea{min-height:92px; resize:vertical; font-family:var(--mono); line-height:1.45;}
+    textarea.small{min-height:62px;}
+
+    .row{margin-bottom:10px;}
+    .hint{font-size:11px; color:var(--muted); line-height:1.45; margin-top:5px;}
+
+    .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; position:sticky; bottom:10px; padding-top:8px; background:linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.9) 30%, rgba(255,255,255,1));}
+    button{cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--text); padding:9px 12px; border-radius: 12px; font-weight:900; font-size:12px;}
+    button.primary{background: linear-gradient(180deg, rgba(37,99,235,.95), rgba(29,78,216,.95)); border-color: rgba(37,99,235,.20); color:#fff; box-shadow: 0 6px 16px rgba(37,99,235,.18);}
+
+    .hr{height:1px; background:var(--line); margin:12px 0;}
+
+    .badge{display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; font-weight:900; font-size:11px; border:1px solid var(--line); background:#f9fafb;}
+    .badge.ok{color:var(--ok); background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.25);}
+    .badge.warn{color:var(--warn); background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.25);}
+    .badge.bad{color:var(--bad); background: rgba(239,68,68,.08); border-color: rgba(239,68,68,.25);}
+
+    .mini{font-size:11px; color:var(--muted); line-height:1.5;}
+
+    pre{margin:0; white-space:pre-wrap; word-break:break-word; font-family: var(--mono); font-size:12px; border:1px solid var(--line); border-radius: 12px; padding:10px; background:#fff; max-height: 70vh; overflow:auto;}
+
+    ul{margin:8px 0 0 18px;}
+    li{margin:6px 0; line-height:1.45; font-size:12px;}
+
+    .checkline{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px;}
+    .checkline label{font-weight:700; font-size:12px;}
+
+    .hidden{display:none;}
+    .previewTop{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+
+    /* (입력 필요) 강조 표시 */
+    .need{ color: var(--bad); font-weight:900; }
+
+    /* 오른쪽 카드도 한 페이지에 더 잘 들어오게 */
+    .rightCard{position:sticky; top:16px;}
+    @media(max-width:980px){ .rightCard{position:static;} pre{max-height:none;} }
+
+    /* 안내 박스(미리보기에서 텍스트로 표시됨) */
+    .noteTxt{color:#1e3a8a; background: rgba(37,99,235,.06); border:1px solid rgba(37,99,235,.18); padding:8px 10px; border-radius:12px; font-size:11px; line-height:1.55; margin:8px 0;}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>개인정보 동의문 생성기/검수기 v2.3</h1>
+  <p class="sub">
+    ✅ 생성/노출 순서: <b>수집·이용 → 제3자 제공 → 마케팅 → 광고성 정보</b><br/>
+    ✅ 제3자 제공 기간은 <b>숫자(개월) 직접 입력</b>, 선택형이 기본값입니다.<br/>
+    ✅ 거부권/불이익 문구는 기본 예시가 입력되어 있으며, 기본값 그대로 유지 시 WARN 처리됩니다.
+  </p>
+
+  <div class="grid">
+    <!-- Left -->
+    <div class="card">
+      <h2>1) 유형 선택</h2>
+
+      <div class="row">
+        <label>동의 유형</label>
+        <select id="scenario">
+          <option value="">선택하세요</option>
+          <option value="COLLECT_ONLY">① 수집·이용만 (단발성/상담 접수)</option>
+          <option value="COLLECT_MARKETING">② 수집·이용 + 마케팅(자사·제휴사)</option>
+          <option value="COLLECT_THIRDPARTY">③ 수집·이용 + 제3자 제공</option>
+          <option value="ALL">④ 수집·이용 + 제3자 제공 + 마케팅(자사·제휴사)</option>
+        </select>
+        <div class="hint">• 유형을 선택해야 다음 입력 필드가 등장합니다.</div>
+      </div>
+
+      <div id="fields" class="hidden">
+        <div class="hr"></div>
+        <h2>2) 수집·이용</h2>
+
+        <div class="row">
+          <label>기본 보유·이용기간(수집·이용 기준)</label>
+          <select id="base_period">
+            <option value="1">1년</option>
+            <option value="2">2년</option>
+            <option value="3" selected>3년(기본)</option>
+            <option value="5">5년</option>
+            <option value="15">15년(과도/위험)</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>수집·이용 항목</label>
+          <textarea id="collect_items">[필수정보] 성명, 성별, 생년월일, 지역, 휴대폰번호
+[자동으로 수집되는 정보] 참여매체, 참여일시, 참여이벤트, IP Address</textarea>
+        </div>
+
+        <div class="row">
+          <label>거부권 및 거부 시 불이익(수집·이용)</label>
+          <textarea id="deny_collect" class="small">상기 동의를 거부할 권리가 있으나, 수집 및 이용에 동의하지 않을 경우 상품 안내 및 이벤트 참여가 불가능합니다.</textarea>
+        </div>
+
+        <!-- Third party -->
+        <div id="tp_block" class="hidden">
+          <div class="hr"></div>
+          <h2>3) 제3자 제공</h2>
+
+          <div class="row">
+            <label>제3자 제공 동의 유형</label>
+            <select id="tp_type">
+              <option value="OPTIONAL" selected>(선택) 제공이 필수가 아닌 선택 동의형</option>
+              <option value="REQUIRED">(필수) 제공이 수집의 주목적인 필수 동의형</option>
+            </select>
+            <div class="hint">• 제공 목적/항목/기간은 제공받는 자와 협의 후, 실제 운영 구조에 맞게 정확히 기재해야 합니다.</div>
+          </div>
+
+          <div class="row">
+            <label>제공받는 자</label>
+            <input type="text" id="tp_receiver" placeholder="예: ㈜KT MNS"/>
+          </div>
+
+          <div class="row">
+            <label>제공 목적</label>
+            <input type="text" id="tp_purpose" placeholder="제공대상자와 협의 후 정확한 제공 목적을 기재해주세요."/>
+            <div class="hint" id="tp_purpose_hint"></div>
+          </div>
+
+          <div class="row">
+            <label>제공 항목</label>
+            <input type="text" id="tp_items" placeholder="제공하시려는 정보를 제공대상자와 협의 후, 정확히 기재해주세요."/>
+            <div class="hint" id="tp_items_hint"></div>
+          </div>
+
+          <div class="row">
+            <label>제공 기간(개월) — 숫자만 입력</label>
+            <input type="text" id="tp_period_m" inputmode="numeric" pattern="[0-9]*" placeholder="예: 3"/>
+            <div class="hint">• 숫자만 입력하세요. (예: 3 → 제공일로부터 3개월)</div>
+          </div>
+
+          <div class="row">
+            <label>거부권 및 거부 시 불이익(제3자 제공)</label>
+            <textarea id="deny_tp" class="small"></textarea>
+            <div class="hint">• 선택/필수 유형에 따라 기본 문구가 자동 입력됩니다(필요 시 수정).</div>
+          </div>
+        </div>
+
+        <!-- Marketing -->
+        <div id="mk_block" class="hidden">
+          <div class="hr"></div>
+          <h2>4) 마케팅/광고성 정보 수신(선택)</h2>
+
+          <div class="row">
+            <label>통합 옵션: 마케팅 활용 동의 + 광고성 정보 수신 동의</label>
+            <select id="mk_integrated">
+              <option value="SEPARATE">원칙: 분리(권고)</option>
+              <option value="INTEGRATED">예외: 통합(콜/이벤트 등)</option>
+            </select>
+            <div class="hint">• 원칙적으로는 분리 권고(권장)이며, 예외적으로 통합 운영이 가능합니다.</div>
+          </div>
+
+          <div class="row">
+            <label>마케팅 기간</label>
+            <select id="mk_period">
+              <option value="SAME">기본기간과 동일</option>
+              <option value="1">1년</option>
+              <option value="2">2년</option>
+              <option value="3" selected>3년</option>
+              <option value="5">5년</option>
+              <option value="15">15년(과도/위험)</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label>수신 채널</label>
+            <div class="checkline">
+              <label><input type="checkbox" id="ch_sms" checked> 문자(SMS/LMS)</label>
+              <label><input type="checkbox" id="ch_call" checked> 전화</label>
+              <label><input type="checkbox" id="ch_email"> 이메일</label>
+            </div>
+          </div>
+
+          <div class="row">
+            <label>거부권 및 거부 시 불이익(마케팅 활용)</label>
+            <textarea id="deny_mk_use" class="small">선택항목으로 거부 가능하며, 거부하더라도 상담 신청 및 진행에는 불이익이 없습니다.</textarea>
+          </div>
+
+          <div class="row">
+            <label>거부권 및 거부 시 불이익(광고성 정보 수신)</label>
+            <textarea id="deny_mk_ad" class="small">동의를 거부하시는 경우에도 서비스 이용에는 불이익이 없습니다.</textarea>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button class="primary" id="btn_review">검수하기</button>
+          <button id="btn_copy">동의문 복사</button>
+          <button id="btn_reset">초기화</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right -->
+    <div class="card rightCard">
+      <div class="previewTop">
+        <h2 style="margin:0;">2) 결과</h2>
+        <span id="overall" class="badge">-</span>
+      </div>
+      <div class="mini" style="margin-top:6px;">생성된 동의문 및 검수 결과</div>
+
+      <div class="hr"></div>
+      <div id="issues"></div>
+      <div class="hr"></div>
+      <pre id="doc_preview"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Utilities =====
+function esc(s){
+  return (s||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
+function normalize(s){
+  return (s||"").replace(/\r/g,"\n").trim();
+}
+function b(label, value){
+  return `  · ${label} :  ${value}`;
+}
+function val(id){
+  const el = document.getElementById(id);
+  return el ? el.value : "";
+}
+function checked(id){
+  const el = document.getElementById(id);
+  return !!(el && el.checked);
+}
+
+function getScenario(){ return val("scenario"); }
+function baseYears(){ return parseInt(val("base_period")||"3", 10); }
+function mkYears(){
+  const v = val("mk_period");
+  if(v === "SAME") return baseYears();
+  return parseInt(v||"3", 10);
+}
+function tpType(){ return val("tp_type") || "OPTIONAL"; }
+function getChannels(){
+  const ch = [];
+  if(checked("ch_sms")) ch.push("문자(SMS/LMS)");
+  if(checked("ch_call")) ch.push("전화");
+  if(checked("ch_email")) ch.push("이메일");
+  return ch;
+}
+
+// ===== Default deny texts =====
+function denyCollectDefault(){
+  return "상기 동의를 거부할 권리가 있으나, 수집 및 이용에 동의하지 않을 경우 상품 안내 및 이벤트 참여가 불가능합니다.";
+}
+function denyMkUseDefault(){
+  return "선택항목으로 거부 가능하며, 거부하더라도 상담 신청 및 진행에는 불이익이 없습니다.";
+}
+function denyMkAdDefault(){
+  return "동의를 거부하시는 경우에도 서비스 이용에는 불이익이 없습니다.";
+}
+function denyTpDefault(){
+  return tpType()==="REQUIRED"
+    ? "본 동의 거부는 가능하나, 상담 진행을 위한 필수 항목으로 거부 시 접수가 불가합니다."
+    : "선택항목으로 거부 가능하며, 거부하더라도 상담 신청 및 참여에는 불이익이 없습니다.";
+}
+
+// ===== UI =====
+function updateThirdPartyHints(){
+  const required = tpType() === "REQUIRED";
+  const hintEl = document.getElementById("tp_purpose_hint");
+  const itemsHintEl = document.getElementById("tp_items_hint");
+
+  if(hintEl){
+    hintEl.innerText = required
+      ? "• (필수형 권장 예시) 전화, 문자를 통한 가입 상담 진행 및 상품 가입(계약) 처리, 고객 민원 처리"
+      : "• (선택형 권장 예시) 전화, 문자를 통한 맞춤형 [상품/서비스] 안내 및 상품 권유";
+  }
+
+  if(itemsHintEl){
+    itemsHintEl.innerText = required
+      ? "• (필수형 권장 예시) 성명, 성별, 생년월일, 휴대폰번호, 상담정보(문의내용포함)"
+      : "• (선택형 권장 예시) 성명, 성별, 휴대폰번호";
+  }
+
+  // 제3자 제공 거부권 문구 자동 세팅(사용자가 이미 수정한 경우는 유지)
+  const denyEl = document.getElementById("deny_tp");
+  if(denyEl && !normalize(denyEl.value)){
+    denyEl.value = denyTpDefault();
+  }
+}
+
+function applyScenarioVisibility(){
+  const s = getScenario();
+  const fields = document.getElementById("fields");
+  const mk = document.getElementById("mk_block");
+  const tp = document.getElementById("tp_block");
+
+  if(!s){
+    fields.classList.add("hidden");
+    mk.classList.add("hidden");
+    tp.classList.add("hidden");
+    setEmpty();
+    return;
+  }
+
+  fields.classList.remove("hidden");
+
+  if(s === "COLLECT_THIRDPARTY" || s === "ALL") tp.classList.remove("hidden");
+  else tp.classList.add("hidden");
+
+  if(s === "COLLECT_MARKETING" || s === "ALL") mk.classList.remove("hidden");
+  else mk.classList.add("hidden");
+
+  updateThirdPartyHints();
+  updatePreview();
+}
+
+// ===== Build document (생성 순서: 수집→제공→마케팅/광고성) =====
+function buildCollectSection(){
+  const years = baseYears();
+  const items = normalize(val("collect_items"));
+  const deny = normalize(val("deny_collect")) || denyCollectDefault();
+
+  return `[필수] 개인정보 수집 및 이용 동의\n\n${
+    [
+      b("개인정보 수집자", "㈜더열심히"),
+      b("수집·이용 목적", "상담 상품 안내(전화, 문자) 및 고객 민원 처리"),
+      `  · 수집·이용 항목 :\n${items || "(입력 필요)"}`,
+      b("보유기간", `수집일부터 ${years}년간 (고객 요청 시 지체없이 파기)`),
+    ].join("\n")
+  }\n\n거부 권리 및 불이익 : ${deny}`;
+}
+
+function buildThirdPartySection(){
+  const required = tpType() === "REQUIRED";
+  const title = required ? "[필수] 개인정보 제3자 제공 동의(필수 동의형)" : "[선택] 개인정보 제3자 제공 동의(선택 동의형)";
+
+  const r = normalize(val("tp_receiver"));
+  const p = normalize(val("tp_purpose"));
+  const i = normalize(val("tp_items"));
+  const m = normalize(val("tp_period_m"));
+  const deny = normalize(val("deny_tp")) || denyTpDefault();
+
+  const defaultPurposeRequired = "전화, 문자를 통한 가입 상담 진행 및 상품 가입(계약) 처리, 고객 민원 처리";
+  const defaultPurposeOptional = "전화, 문자를 통한 맞춤형 [상품/서비스] 안내 및 상품 권유";
+  const purposeLine = required ? (p || defaultPurposeRequired) : (p || defaultPurposeOptional);
+
+  return `${title}\n\n${
+    [
+      b("제공받는 자", r || "(입력 필요)"),
+      b("제공 목적", purposeLine || "(입력 필요)"),
+      b("제공 항목", i || "(입력 필요)"),
+      b("제공 기간", m ? `제공일로부터 ${m}개월` : "(입력 필요)"),
+    ].join("\n")
+  }\n\n거부권 및 불이익 : ${deny}`;
+}
+
+function buildMarketingSection(){
+  const years = mkYears();
+  const channels = getChannels();
+  const integrated = val("mk_integrated") === "INTEGRATED";
+
+  const purpose = `전화 및 문자를 통한 자사 및 제휴사 상품의 마케팅 및 맞춤 정보 제공`;
+  const items = `성명, 연락처`;
+  const chText = channels.length ? ` (수신채널: ${channels.join(", ")})` : "";
+
+  const denyUse = normalize(val("deny_mk_use")) || denyMkUseDefault();
+  const denyAd = normalize(val("deny_mk_ad")) || denyMkAdDefault();
+
+  if(integrated){
+    return `[선택] 마케팅 활용 및 광고성 정보 수신 동의(통합)\n\n${
+      [
+        b("개인정보 수집자", "㈜더열심히"),
+        b("활용 목적", `${purpose}${chText}`),
+        b("활용 항목", items),
+        b("활용 기간", `동의일로부터 ${years}년 (동의 철회 시 지체없이 파기)`),
+      ].join("\n")
+    }\n\n거부권 및 불이익 : ${denyUse}\n\n[안내]\n원칙적으로는 ‘마케팅 활용 동의(개인정보보호법)’와 ‘광고성 정보 수신 동의(정보통신망법)’를 분리하여 받는 것이 권고됩니다.\n다만 콜/이벤트 등 마케팅 목적 프로세스에서 동의항목 과다로 인해 동의율이 급감하는 경우, 예외적으로 통합하여 운영할 수 있습니다.`;
+  }
+
+  return `[선택] 마케팅 활용에 따른 정보 수신 동의\n\n${
+    [
+      b("개인정보 수집자", "㈜더열심히"),
+      b("활용 목적", purpose),
+      b("활용 항목", items),
+      b("활용 기간", `동의일로부터 ${years}년 (동의 철회 시 지체없이 파기)`),
+    ].join("\n")
+  }\n\n거부권 및 불이익 : ${denyUse}\n\n\n[선택] 광고성 정보 수신 동의\n\n${b("수신채널", channels.length ? channels.join(", ") : "(미선택)")}\n광고성 정보 수신 동의 시 ㈜더열심히 및 제휴사의 상품정보 및 이벤트 등 다양한 혜택을 받아 보실 수 있으며, ${denyAd}`;
+}
+
+function buildDoc(){
+  const s = getScenario();
+  if(!s) return "";
+
+  let doc = buildCollectSection();
+
+  // 순서 고정: 수집 → 제공 → 마케팅/광고성
+  if(s === "COLLECT_THIRDPARTY" || s === "ALL") doc += "\n\n" + buildThirdPartySection();
+  if(s === "COLLECT_MARKETING" || s === "ALL") doc += "\n\n" + buildMarketingSection();
+
+  return doc.trim();
+}
+
+function updatePreview(){
+  renderDocToPreview();
+  document.getElementById("issues").innerHTML = "";
+  document.getElementById("overall").className = "badge";
+  document.getElementById("overall").innerText = "-";
+}
+
+function renderDocToPreview(){
+  const txt = buildDoc();
+  const html = esc(txt).replaceAll("(입력 필요)", '<span class="need">(입력 필요)</span>');
+  document.getElementById("doc_preview").innerHTML = html;
+}
+
+// ===== Review =====
+function badge(cls, txt){
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+
+function runReview(){
+  const s = getScenario();
+  if(!s){
+    alert("동의 유형을 먼저 선택하세요.");
+    return;
+  }
+
+  const issues = [];
+  const warns = [];
+
+  const by = baseYears();
+
+  // 기본기간 위험
+  if(by > 5){
+    warns.push(`[보유기간 과도] 수집·이용기간이 ${by}년으로 5년을 초과합니다. 기간 단축 또는 근거 확보가 필요합니다.`);
+  }else if(by === 5){
+    warns.push(`[보유기간 주의] 수집·이용기간이 5년입니다. 정당한 사유(분쟁대응/법정 보존 등)를 점검할 것을 권고합니다.`);
+  }
+
+  // 수집 항목
+  const collectItems = normalize(val("collect_items"));
+  if(!collectItems) issues.push("[수집 항목] 수집 항목이 비어있습니다.");
+
+  // 거부권/불이익 공란 검사
+  const denyC = normalize(val("deny_collect"));
+  if(!denyC) issues.push("[거부권/불이익-수집·이용] 문구가 비어있습니다.");
+
+  // 기본 예시 그대로 WARN
+  if(denyC && denyC === denyCollectDefault()) warns.push("[거부권/불이익-수집·이용] 기본 예시 문구가 그대로 유지되어 있습니다. 실제 운영 구조/불이익 범위에 맞게 점검을 권고합니다.");
+
+  // 제3자 제공 검수
+  if(s === "COLLECT_THIRDPARTY" || s === "ALL"){
+    const r = normalize(val("tp_receiver"));
+    const p = normalize(val("tp_purpose"));
+    const i = normalize(val("tp_items"));
+    const m = normalize(val("tp_period_m"));
+    const denyTp = normalize(val("deny_tp"));
+
+    if(!r) issues.push("[제3자 제공] 제공받는 자가 비어있습니다.");
+    if(!i) issues.push("[제3자 제공] 제공 항목이 비어있습니다.");
+
+    // 기간 숫자 검증
+    if(!m) issues.push("[제3자 제공] 제공 기간(개월)이 비어있습니다.");
+    else if(!/^[0-9]+$/.test(m)) issues.push("[제3자 제공] 제공 기간(개월)은 숫자만 입력해야 합니다.");
+
+    // 거부권 공란
+    if(!denyTp) issues.push("[거부권/불이익-제3자 제공] 문구가 비어있습니다.");
+
+    // 선택형 목적에 가입/계약 처리 포함 시 WARN
+    if(tpType() === "OPTIONAL" && p && /(가입|계약|처리|청약)/.test(p)){
+      warns.push("[제3자 제공-선택형] 제공 목적에 ‘가입/계약 처리’ 취지가 포함되어 있습니다. 통상 필수 동의형으로 해석될 여지가 있으므로 목적 문구를 ‘맞춤 안내/권유’ 중심으로 조정하는 것을 권고합니다.");
+    }
+
+    // 기본 예시 그대로 WARN
+    if(denyTp && denyTp === denyTpDefault()) warns.push("[거부권/불이익-제3자 제공] 기본 예시 문구가 그대로 유지되어 있습니다. 제공 구조(선택/필수) 및 거부 시 영향 범위에 맞게 점검을 권고합니다.");
+  }
+
+  // 마케팅 검수
+  if(s === "COLLECT_MARKETING" || s === "ALL"){
+    const my = mkYears();
+    if(my > by) issues.push(`[기간 정합성 불일치] 마케팅/광고성 수신 기간(${my}년)이 수집·이용 기간(${by}년)보다 길어 정합성이 맞지 않습니다.`);
+    if(my > 5) warns.push(`[마케팅 기간 과도] 마케팅/광고성 수신 기간이 ${my}년으로 5년을 초과합니다. 기간 단축을 권고합니다.`);
+
+    const ch = getChannels();
+    if(!ch.length) warns.push("[수신채널 미선택] 수신채널(문자/전화/이메일)이 선택되지 않았습니다.");
+
+    const denyMkUse = normalize(val("deny_mk_use"));
+    const denyMkAd = normalize(val("deny_mk_ad"));
+
+    if(!denyMkUse) issues.push("[거부권/불이익-마케팅 활용] 문구가 비어있습니다.");
+    if(!denyMkAd) issues.push("[거부권/불이익-광고성 정보 수신] 문구가 비어있습니다.");
+
+    if(denyMkUse && denyMkUse === denyMkUseDefault()) warns.push("[거부권/불이익-마케팅 활용] 기본 예시 문구가 그대로 유지되어 있습니다. 실제 운영 구조에 맞게 점검을 권고합니다.");
+    if(denyMkAd && denyMkAd === denyMkAdDefault()) warns.push("[거부권/불이익-광고성 정보 수신] 기본 예시 문구가 그대로 유지되어 있습니다. 채널/수신거부 안내 방식 등 운영 구조에 맞게 점검을 권고합니다.");
+  }
+
+  // overall
+  let overall = "PASS";
+  if(issues.length) overall = "FAIL";
+  else if(warns.length) overall = "WARN";
+
+  const overallEl = document.getElementById("overall");
+  if(overall === "PASS"){ overallEl.className = "badge ok"; overallEl.innerText = "✅ PASS"; }
+  if(overall === "WARN"){ overallEl.className = "badge warn"; overallEl.innerText = "⚠️ WARN"; }
+  if(overall === "FAIL"){ overallEl.className = "badge bad"; overallEl.innerText = "❌ FAIL"; }
+
+  document.getElementById("issues").innerHTML = `
+    <div>${issues.length ? badge("bad","필수 수정") : badge("ok","필수 수정 없음")}</div>
+    ${issues.length ? `<ul>${issues.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+
+    <div style="margin-top:10px;">${warns.length ? badge("warn","권고/주의") : badge("ok","권고/주의 없음")}</div>
+    ${warns.length ? `<ul>${warns.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+  `;
+
+  renderDocToPreview();
+}
+
+function copyDoc(){
+  const txt = buildDoc();
+  if(!txt){
+    alert("먼저 동의 유형을 선택하고, 동의문이 생성된 상태인지 확인하세요.");
+    return;
+  }
+  navigator.clipboard.writeText(txt).then(()=>alert("동의문이 복사되었습니다.")).catch(()=>alert("복사 실패: 권한 확인"));
+}
+
+function resetAll(){
+  document.getElementById("scenario").value = "";
+  document.getElementById("fields").classList.add("hidden");
+  document.getElementById("mk_block").classList.add("hidden");
+  document.getElementById("tp_block").classList.add("hidden");
+
+  document.getElementById("base_period").value = "3";
+  document.getElementById("collect_items").value = `[필수정보] 성명, 성별, 생년월일, 지역, 휴대폰번호\n[자동으로 수집되는 정보] 참여매체, 참여일시, 참여이벤트, IP Address`;
+  document.getElementById("deny_collect").value = denyCollectDefault();
+
+  // marketing defaults
+  document.getElementById("mk_integrated").value = "SEPARATE";
+  document.getElementById("mk_period").value = "3";
+  document.getElementById("ch_sms").checked = true;
+  document.getElementById("ch_call").checked = true;
+  document.getElementById("ch_email").checked = false;
+  document.getElementById("deny_mk_use").value = denyMkUseDefault();
+  document.getElementById("deny_mk_ad").value = denyMkAdDefault();
+
+  // third party defaults
+  document.getElementById("tp_type").value = "OPTIONAL";
+  document.getElementById("tp_receiver").value = "";
+  document.getElementById("tp_purpose").value = "";
+  document.getElementById("tp_items").value = "";
+  document.getElementById("tp_period_m").value = "";
+  document.getElementById("deny_tp").value = "";
+
+  setEmpty();
+  alert("초기화되었습니다.");
+}
+
+function setEmpty(){
+  document.getElementById("doc_preview").innerHTML = "";
+  document.getElementById("issues").innerHTML = "";
+  document.getElementById("overall").className = "badge";
+  document.getElementById("overall").innerText = "-";
+}
+
+// ===== Event wiring (오작동 방지: 인라인 의존 제거) =====
+function wireEvents(){
+  document.getElementById("scenario").addEventListener("change", applyScenarioVisibility);
+
+  // 공통 입력 이벤트: 프리뷰 자동 반영
+  const liveIds = [
+    "base_period","collect_items","deny_collect",
+    "tp_type","tp_receiver","tp_purpose","tp_items","tp_period_m","deny_tp",
+    "mk_integrated","mk_period","ch_sms","ch_call","ch_email","deny_mk_use","deny_mk_ad"
+  ];
+
+  liveIds.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const evt = (el.tagName === "SELECT" || el.type === "checkbox") ? "change" : "input";
+    el.addEventListener(evt, ()=>{
+      if(id === "tp_type") updateThirdPartyHints();
+      updatePreview();
+    });
+  });
+
+  document.getElementById("btn_review").addEventListener("click", runReview);
+  document.getElementById("btn_copy").addEventListener("click", copyDoc);
+  document.getElementById("btn_reset").addEventListener("click", resetAll);
+}
+
+window.addEventListener("DOMContentLoaded", ()=>{
+  wireEvents();
+  setEmpty();
+});
+</script>
+</body>
+</html>
